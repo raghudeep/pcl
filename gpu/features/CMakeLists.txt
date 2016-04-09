@@ -1,7 +1,7 @@
 set(SUBSYS_NAME gpu_features)
 set(SUBSYS_PATH gpu/features)
 set(SUBSYS_DESC "Temporary GPU_common module. Weak CUDA dependency: a code that use this module requires CUDA Toolkit installed, but should be compiled without nvcc")
-set(SUBSYS_DEPS common gpu_containers gpu_utils gpu_octree geometry)
+set(SUBSYS_DEPS common io gpu_containers gpu_utils gpu_octree geometry search kdtree octree visualization features)
 
 set(build TRUE)
 PCL_SUBSYS_OPTION(build "${SUBSYS_NAME}" "${SUBSYS_DESC}" ON)
@@ -34,4 +34,5 @@ if (build)
     PCL_ADD_INCLUDES("${SUBSYS_NAME}" "${SUBSYS_PATH}" ${incs}  ${dev_incs})
     
     add_subdirectory(test)
+    add_subdirectory(tools)
 endif()

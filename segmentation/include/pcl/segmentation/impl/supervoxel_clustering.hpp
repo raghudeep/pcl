@@ -110,9 +110,9 @@ pcl::SupervoxelClustering<PointT>::setNormalCloud (typename NormalCloudT::ConstP
 template <typename PointT> void
 pcl::SupervoxelClustering<PointT>::extract (std::map<uint32_t,typename Supervoxel<PointT>::Ptr > &supervoxel_clusters)
 {
-  //timer_.reset ();
-  //double t_start = timer_.getTime ();
-  //std::cout << "Init compute  \n";
+  timer_.reset ();
+  double t_start = timer_.getTime ();
+  std::cout << "Init compute  \n";
   bool segmentation_is_possible = initCompute ();
   if ( !segmentation_is_possible )
   {
@@ -120,7 +120,7 @@ pcl::SupervoxelClustering<PointT>::extract (std::map<uint32_t,typename Supervoxe
     return;
   }
   
-  //std::cout << "Preparing for segmentation \n";
+  std::cout << "Preparing for segmentation \n";
   segmentation_is_possible = prepareForSegmentation ();
   if ( !segmentation_is_possible )
   {
@@ -128,31 +128,31 @@ pcl::SupervoxelClustering<PointT>::extract (std::map<uint32_t,typename Supervoxe
     return;
   }
   
-  //double t_prep = timer_.getTime ();
-  //std::cout << "Placing Seeds" << std::endl;
+  double t_prep = timer_.getTime ();
+  std::cout << "Placing Seeds" << std::endl;
   std::vector<int> seed_indices;
   selectInitialSupervoxelSeeds (seed_indices);
-  //std::cout << "Creating helpers "<<std::endl;
+  std::cout << "Creating helpers "<<std::endl;
   createSupervoxelHelpers (seed_indices);
-  //double t_seeds = timer_.getTime ();
+  double t_seeds = timer_.getTime ();
   
   
-  //std::cout << "Expanding the supervoxels" << std::endl;
+  std::cout << "Expanding the supervoxels" << std::endl;
   int max_depth = static_cast<int> (1.8f*seed_resolution_/resolution_);
   expandSupervoxels (max_depth);
-  //double t_iterate = timer_.getTime ();
+  double t_iterate = timer_.getTime ();
     
-  //std::cout << "Making Supervoxel structures" << std::endl;
+  std::cout << "Making Supervoxel structures" << std::endl;
   makeSupervoxels (supervoxel_clusters);
-  //double t_supervoxels = timer_.getTime ();
+  double t_supervoxels = timer_.getTime ();
   
- // std::cout << "--------------------------------- Timing Report --------------------------------- \n";
- // std::cout << "Time to prep (normals, neighbors, voxelization)="<<t_prep-t_start<<" ms\n";
- // std::cout << "Time to seed clusters                          ="<<t_seeds-t_prep<<" ms\n";
- // std::cout << "Time to expand clusters                        ="<<t_iterate-t_seeds<<" ms\n";
- // std::cout << "Time to create supervoxel structures           ="<<t_supervoxels-t_iterate<<" ms\n";
- // std::cout << "Total run time                                 ="<<t_supervoxels-t_start<<" ms\n";
- // std::cout << "--------------------------------------------------------------------------------- \n";
+  std::cout << "--------------------------------- Timing Report --------------------------------- \n";
+  std::cout << "Time to prep (normals, neighbors, voxelization)="<<t_prep-t_start<<" ms\n";
+  std::cout << "Time to seed clusters                          ="<<t_seeds-t_prep<<" ms\n";
+  std::cout << "Time to expand clusters                        ="<<t_iterate-t_seeds<<" ms\n";
+  std::cout << "Time to create supervoxel structures           ="<<t_supervoxels-t_iterate<<" ms\n";
+  std::cout << "Total run time                                 ="<<t_supervoxels-t_start<<" ms\n";
+  std::cout << "--------------------------------------------------------------------------------- \n";
   
   deinitCompute ();
 }
@@ -382,15 +382,16 @@ pcl::SupervoxelClustering<PointT>::selectInitialSupervoxelSeeds (std::vector<int
   //TODO THIS IS BAD - SEEDING SHOULD BE BETTER
   //TODO Switch to assigning leaves! Don't use Octree!
   
- // std::cout << "Size of centroid cloud="<<voxel_centroid_cloud_->size ()<<", seeding resolution="<<seed_resolution_<<"\n";
+  std::cout << "Size of centroid cloud="<<voxel_centroid_cloud_->size ()<<", seeding resolution="<<seed_resolution_<<"\n";
   //Initialize octree with voxel centroids
   pcl::octree::OctreePointCloudSearch <PointT> seed_octree (seed_resolution_);
   seed_octree.setInputCloud (voxel_centroid_cloud_);
+  std::cout << "Voxel centroid cloud, num points="<<voxel_centroid_cloud_->points.size()<<"\n";
   seed_octree.addPointsFromInputCloud ();
- // std::cout << "Size of octree ="<<seed_octree.getLeafCount ()<<"\n";
+  std::cout << "Size of octree ="<<seed_octree.getLeafCount ()<<"\n";
   std::vector<PointT, Eigen::aligned_allocator<PointT> > voxel_centers; 
   int num_seeds = seed_octree.getOccupiedVoxelCenters(voxel_centers); 
-  //std::cout << "Number of seed points before filtering="<<voxel_centers.size ()<<std::endl;
+  std::cout << "Number of seed points before filtering="<<voxel_centers.size ()<<" " << num_seeds << std::endl;
   
   std::vector<int> seed_indices_orig;
   seed_indices_orig.resize (num_seeds, 0);
@@ -417,18 +418,23 @@ pcl::SupervoxelClustering<PointT>::selectInitialSupervoxelSeeds (std::vector<int
   float search_radius = 0.5f*seed_resolution_;
   // This is number of voxels which fit in a planar slice through search volume
   // Area of planar slice / area of voxel side
-  float min_points = 0.05f * (search_radius)*(search_radius) * 3.1415926536f  / (resolution_*resolution_);
+  //float min_points = 0.05f * (search_radius)*(search_radius) * 3.1415926536f  / (resolution_*resolution_);
   for (size_t i = 0; i < seed_indices_orig.size (); ++i)
   {
+    //int num = voxel_kdtree_->radiusSearch (seed_indices_orig[i], search_radius , neighbors, sqr_distances);
+    //int min_index = seed_indices_orig[i];
+    //if ( num > min_points)
+    //{
+    //  seed_indices.push_back (min_index);
+    //}
     int num = voxel_kdtree_->radiusSearch (seed_indices_orig[i], search_radius , neighbors, sqr_distances);
-    int min_index = seed_indices_orig[i];
-    if ( num > min_points)
-    {
-      seed_indices.push_back (min_index);
-    }
-    
+    if ( num > 0 )
+      seed_indices.push_back ( seed_indices_orig[i] );
   }
- // std::cout << "Number of seed points after filtering="<<seed_points.size ()<<std::endl;
+  seed_indices.clear ();
+  for (size_t i = 0; i < voxel_centroid_cloud_->points.size (); ++i)
+    seed_indices.push_back( i );
+  std::cout << "Number of seed points after filtering="<<seed_indices.size ()<<std::endl;
   
 }
 

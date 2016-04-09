@@ -50,6 +50,15 @@
 #include <pcl/kdtree/kdtree.h>
 #include <pcl/common/time.h>
 #include <pcl/console/parse.h>
+#include <pcl/console/print.h>
+#include <pcl/console/time.h>
+using namespace pcl::console;
+
+
+#include <pcl/features/normal_3d_omp.h>
+#define NORM_EST_RAD 0.03 // 3 // Use all neighbors in a sphere of radius 3cm
+#define FPFH_RAD_SEARCH 0.2
+#define NUM_THREADS 38
 
 int
 main (int argc, char** av)
@@ -82,13 +91,26 @@ main (int argc, char** av)
   pcl::console::print_highlight ("Removed nans from %lu to %lu\n", cloud_ptr->points.size (), cloud_no_nans->points.size ());
 
   // Estimate the normals
-  pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
+  TicToc tt;
+  tt.tic ();
+  print_highlight ("Computing normals using OpenMP for "); print_value ("\n");
+  pcl::NormalEstimationOMP<pcl::PointXYZ, pcl::Normal> normal_estimation;
+  normal_estimation.setInputCloud (cloud_ptr);
+  pcl::search::KdTree<pcl::PointXYZ>::Ptr kdtree (new pcl::search::KdTree<pcl::PointXYZ>);
+  normal_estimation.setSearchMethod (kdtree);
+  //pcl::PointCloud<pcl::Normal>::Ptr cloud_normals (new pcl::PointCloud< pcl::Normal>);
+  normal_estimation.setRadiusSearch (NORM_EST_RAD);
+  normal_estimation.setNumberOfThreads(NUM_THREADS);
+  normal_estimation.compute (*cloud_normals);
+  print_info ("[done, "); print_value ("%g", tt.toc ()); print_info (" ms : "); print_value ("%d", cloud_normals->points.size()); print_info (" points]\n");
+
+  /*pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
   ne.setInputCloud (cloud_no_nans);
   pcl::search::KdTree<pcl::PointXYZ>::Ptr tree_n (new pcl::search::KdTree<pcl::PointXYZ>());
   ne.setSearchMethod (tree_n);
   ne.setRadiusSearch (0.03);
   ne.compute (*cloud_normals);
-  pcl::console::print_highlight ("Normals are computed and size is %lu\n", cloud_normals->points.size ());
+  pcl::console::print_highlight ("Normals are computed and size is %lu\n", cloud_normals->points.size ());*/
 
   // Region growing
   pcl::RegionGrowing<pcl::PointXYZ, pcl::Normal> rg;
@@ -100,13 +122,24 @@ main (int argc, char** av)
   pcl::StopWatch watch;
   rg.extract (clusters);
   pcl::console::print_highlight ("Extraction time: %f\n", watch.getTimeSeconds());
-  cloud_segmented = rg.getColoredCloud ();
+  pcl::console::print_highlight ("Number of segments done is %lu\n", clusters.size ());
+
+  /*pcl::PointCloud<pcl::PointXYZL>::Ptr full_labeled_cloud = rg.getLabeledCloud ();
+  std::cout << "Number of points in fully labelled supervoxel cloud " << full_labeled_cloud->width * full_labeled_cloud->height << "!\n";
+  std::cout << "Max label : " << super.getMaxLabel() << "\n";
+  int count = 0;
+  #pragma omp parallel for
+  for (int i=0; i<full_labeled_cloud->width * full_labeled_cloud->height; i++)
+    if (full_labeled_cloud->points[i].label==0) count++;
+  std::cout << "Number of unlabelled vertices : " << count << "!\n";*/
+
+  //cloud_segmented = rg.getColoredCloud ();
 
   // Writing the resulting cloud into a pcd file
-  pcl::console::print_highlight ("Number of segments done is %lu\n", clusters.size ());
-  writer.write<pcl::PointXYZRGB> ("segment_result.pcd", *cloud_segmented, false);
+  //pcl::console::print_highlight ("Number of segments done is %lu\n", clusters.size ());
+  //writer.write<pcl::PointXYZRGB> ("segment_result.pcd", *cloud_segmented, false);
 
-  if (pcl::console::find_switch (argc, av, "-dump"))
+  /*if (pcl::console::find_switch (argc, av, "-dump"))
   {
     pcl::console::print_highlight ("Writing clusters to clusters.dat\n");
     std::ofstream clusters_file;
@@ -121,7 +154,7 @@ main (int argc, char** av)
       clusters_file << std::endl;
     }
     clusters_file.close ();
-  }
+  }*/
 
   return (0);
 }

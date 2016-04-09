@@ -1,0 +1,2 @@
+cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_examples=ON -DBUILD_CUDA=ON -DBUILD_GPU=ON -DBUILD_cuda_io=ON -DBUILD_gpu_surface=ON -DBUILD_gpu_octree=ON -DBUILD_gpu_people=ON -DBUILD_gpu_tracking=ON -DBUILD_gpu_features=ON ..
+make -j 32
