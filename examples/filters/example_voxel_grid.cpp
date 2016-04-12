@@ -104,7 +104,7 @@ main (int argc, char** argv)
       //int gt_label; in_ >> gt_label;
       //if (indx==0) out_ << gt_label << "\n";
       //else out_ << std::distance(frequency[indx], std::max_element(frequency[indx], frequency[indx] + 9)) << "\n";
-      out_ << std::distance(frequency[indx], std::max_element(frequency[indx], frequency[indx] + 9)) << "\n";
+      out_ << std::distance(frequency[indx], std::max_element(frequency[indx], frequency[indx] + num_classes)) << "\n";
     }
     std::cout << "Writing sp gt file : " << out_path << " in " << tt.toc() << " ms.\n";
   }
