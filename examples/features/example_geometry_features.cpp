@@ -43,70 +43,168 @@
 #include <vector>
 #include <fstream>
 
-/*#include <pcl/console/print.h>
+#include <pcl/console/print.h>
 #include <pcl/console/time.h>
 #include <pcl/io/pcd_io.h>
+#include <pcl/io/ply_io.h>
 #include <pcl/point_types.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/features/normal_3d_omp.h>
 #include <pcl/features/spin_image.h>
 #include <pcl/features/fpfh.h>
-#include <pcl/features/fpfh_omp.h>*/
+#include <pcl/features/fpfh_omp.h>
+#include <pcl/features/shot_omp.h>
 
-//#include <pcl/gpu/octree/octree.hpp>
-//#include <pcl/gpu/containers/device_array.hpp>
-//#include <pcl/gpu/features/features.hpp>
-//#include </lustre/home/rgadde/semantic3d/pcl/gpu/features/include/pcl/gpu/features/features.hpp>
+using namespace pcl;
+using namespace pcl::io;
+using namespace pcl::console;
 
-//using namespace pcl::console;
-
-#define NORM_EST_RAD 0.03 // Use all neighbors in a sphere of radius 3cm
+#define NORM_EST_RAD 0.03 
 #define FPFH_RAD_SEARCH 0.2
+#define SHOT_RAD_SEARCH 0.2
 #define NUM_THREADS 64
 
 int
-main (int, char** argv)
+main (int, char**)
 {
-  std::string filename = argv[1];
-  std::cout << "Reading " << filename << std::endl;
-  /*pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
+  std::string filename = "/home/raghudeep/varcity3dchallenge/data/ruemonge428/pcl.ply";
+  std::string train_filename = "/home/raghudeep/varcity3dchallenge/data/ruemonge428/pcl_gt_train.ply";
+  std::string test_filename = "/home/raghudeep/varcity3dchallenge/data/ruemonge428/pcl_gt_test.ply";
 
   TicToc tt;
+
+  pcl::PLYReader reader;
+  pcl::PCLPointCloud2 blob;
   tt.tic ();
-  print_highlight ("Reading "); print_value ("%s ", filename.c_str ());
-  if (pcl::io::loadPCDFile <pcl::PointXYZ> (filename.c_str (), *cloud) == -1)
-  {
-    PCL_ERROR ("Couldn't read file");
-    return (-1);
-  }
-  print_info ("[done, "); print_value ("%g", tt.toc ()); print_info (" ms : "); print_value ("%d", cloud->points.size()); print_info (" points]\n");*/
-/*
+  print_highlight ("Reading point clouds ... "); print_value ("%s\n", filename.c_str ());
+  if (reader.read (filename, blob) < 0) return (false);
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_xyzrgb (new pcl::PointCloud<pcl::PointXYZRGB>);
+  pcl::fromPCLPointCloud2 (blob, *cloud_xyzrgb);
+  pcl::PointCloud<pcl::Normal>::Ptr cloud_normal (new pcl::PointCloud<pcl::Normal>);
+  pcl::fromPCLPointCloud2 (blob, *cloud_normal);
+  print_info ("Available dimensions: "); print_value ("%s\n", pcl::getFieldsList (*cloud_xyzrgb).c_str ());
+  print_info ("Available dimensions: "); print_value ("%s\n", pcl::getFieldsList (*cloud_normal).c_str ());
+
+  print_highlight ("Reading point clouds ... "); print_value ("%s\n", train_filename.c_str ());
+  if (reader.read (train_filename, blob) < 0) return (false);
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_train (new pcl::PointCloud<pcl::PointXYZRGB>);
+  pcl::fromPCLPointCloud2 (blob, *cloud_train);
+  print_info ("Available dimensions: "); print_value ("%s\n", pcl::getFieldsList ( *cloud_train ).c_str ());
+
+  print_highlight ("Reading point clouds ... "); print_value ("%s\n", test_filename.c_str ());
+  if (reader.read (test_filename, blob) < 0) return (false);
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_test (new pcl::PointCloud<pcl::PointXYZRGB>);
+  pcl::fromPCLPointCloud2 (blob, *cloud_test);
+  print_info ("Available dimensions: "); print_value ("%s\n", pcl::getFieldsList (*cloud_test).c_str ());
+  print_info ("done, "); print_value ("%g", tt.toc ()); print_info (" ms : "); print_value ("%d", cloud_xyzrgb->width * cloud_xyzrgb->height); print_info (" points]\n");
+
+  pcl::search::KdTree<PointXYZRGB>::Ptr kdtree;
+  kdtree.reset (new search::KdTree<PointXYZRGB> (false));
+  pcl::search::KdTree<PointXYZ>::Ptr kdtree2;
+  kdtree2.reset (new search::KdTree<PointXYZ> (false));
+
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_xyz (new pcl::PointCloud<pcl::PointXYZ>);
+  pcl::copyPointCloud(*cloud_xyzrgb, *cloud_xyz);
+
+  // indices of training and testing points.
+  pcl::PointIndices::Ptr indices (new pcl::PointIndices ());
+  for (int i=0; i < cloud_xyzrgb->points.size(); i++) 
+    if ( !(cloud_train->points[i].r==0 && cloud_train->points[i].g==0 && cloud_train->points[i].b==0) ||
+         !(cloud_test->points[i].r==0  && cloud_test->points[i].g==0  && cloud_test->points[i].b==0) ) 
+      indices->indices.push_back(i);
+  print_info("Number of key points : %d\n",indices->indices.size());
+
   // Estimating the normals
-  tt.tic ();
+  /*tt.tic ();
   print_highlight ("Computing normals for "); print_value ("%s ", filename.c_str ());
   pcl::NormalEstimationOMP<pcl::PointXYZ, pcl::Normal> normal_estimation;
-  normal_estimation.setInputCloud (cloud);
-  pcl::search::KdTree<pcl::PointXYZ>::Ptr kdtree (new pcl::search::KdTree<pcl::PointXYZ>);
-  normal_estimation.setSearchMethod (kdtree);
+  normal_estimation.setInputCloud (cloud_xyz);
+  //pcl::search::KdTree<pcl::PointXYZ>::Ptr kdtree (new pcl::search::KdTree<pcl::PointXYZ>);
+  normal_estimation.setSearchMethod (kdtree2);
   pcl::PointCloud<pcl::Normal>::Ptr cloud_n (new pcl::PointCloud< pcl::Normal>);
   normal_estimation.setRadiusSearch (NORM_EST_RAD);
   normal_estimation.setNumberOfThreads(NUM_THREADS);
-  normal_estimation.compute (*cloud_n);
+  //normal_estimation.compute (*cloud_n);
   print_info ("[done, "); print_value ("%g", tt.toc ()); print_info (" ms : "); print_value ("%d", cloud_n->points.size()); print_info (" points]\n");*/
-/*
+
   // Estimating Fast Point Feature Histogram
   tt.tic ();
-  print_highlight ("Computing FPFH for "); print_value ("%s ", filename.c_str ());
-  pcl::FPFHEstimationOMP<pcl::PointXYZ, pcl::Normal, pcl::FPFHSignature33> fpfh_estimation;
-  fpfh_estimation.setInputCloud (cloud);
-  fpfh_estimation.setInputNormals (cloud_n);
+  print_highlight ("Computing FPFH using OpenMP for "); print_value ("%s \n", filename.c_str ());
+  pcl::FPFHEstimationOMP<pcl::PointXYZRGB, pcl::Normal, pcl::FPFHSignature33> fpfh_estimation;
+  fpfh_estimation.setInputCloud (cloud_xyzrgb);
+  fpfh_estimation.setInputNormals (cloud_normal);
   fpfh_estimation.setSearchMethod (kdtree);
-  pcl::PointCloud<pcl::FPFHSignature33>::Ptr pfh_features (new pcl::PointCloud<pcl::FPFHSignature33>);
-  fpfh_estimation.setRadiusSearch (FPFH_RAD_SEARCH);
   fpfh_estimation.setNumberOfThreads(NUM_THREADS);
+  fpfh_estimation.setIndices(indices);
+  pcl::PointCloud<pcl::FPFHSignature33>::Ptr pfh_features (new pcl::PointCloud<pcl::FPFHSignature33>);
+  fpfh_estimation.setRadiusSearch (0.3);
   fpfh_estimation.compute (*pfh_features);
   print_info ("[done, "); print_value ("%g", tt.toc ()); print_info (" ms : "); print_value ("%d", pfh_features->points.size()); print_info (" points]\n");
-*/
+
+  tt.tic ();
+  print_highlight ("Computing SHOTColor using OpenMP for "); print_value ("%s \n", filename.c_str ());
+  pcl::SHOTColorEstimationOMP<pcl::PointXYZRGB, pcl::Normal, pcl::SHOT1344> shotcolor_estimation;
+  shotcolor_estimation.setRadiusSearch (0.3);
+  shotcolor_estimation.setNumberOfThreads(NUM_THREADS);
+  shotcolor_estimation.setInputCloud (cloud_xyzrgb);
+  shotcolor_estimation.setInputNormals (cloud_normal);
+  shotcolor_estimation.setIndices(indices);
+  pcl::PointCloud<pcl::SHOT1344>::Ptr shotcolor_features (new pcl::PointCloud<pcl::SHOT1344>);
+  shotcolor_estimation.compute (*shotcolor_features);
+  print_info ("[done, "); print_value ("%g", tt.toc ()); print_info (" ms : "); print_value ("%d", shotcolor_features->points.size()); print_info (" points]\n");
+
+  tt.tic ();
+  print_highlight ("Computing SpinImages for "); print_value ("%s \n", filename.c_str ());
+  pcl::SpinImageEstimation<pcl::PointXYZ, pcl::Normal, pcl::Histogram<153> > spin_image_descriptor(8, 0.0, 0);
+  spin_image_descriptor.setInputCloud (cloud_xyz);
+  spin_image_descriptor.setInputNormals (cloud_normal);
+  spin_image_descriptor.setSearchMethod (kdtree2);
+  pcl::PointCloud<pcl::Histogram<153> >::Ptr spin_images (new pcl::PointCloud<pcl::Histogram<153> >);
+  spin_image_descriptor.setRadiusSearch (0.3); // default 0.2
+  spin_image_descriptor.setIndices(indices);
+  spin_image_descriptor.compute (*spin_images);
+  print_info ("[done, "); print_value ("%g", tt.toc ()); print_info (" ms : "); print_value ("%d", spin_images->points.size()); print_info (" points]\n");
+
+  std::ofstream test_("test.txt");
+  std::ofstream train_("train.txt");
+
+  tt.tic ();
+  print_highlight ("Saving ");
+  for (int i=0; i < indices->indices.size(); i++) {
+    int I = indices->indices[i];
+    if ( !(cloud_train->points[I].r==0 && cloud_train->points[I].g==0 && cloud_train->points[I].b==0) ) {
+      for (int j=0; j < 33; j++)
+        train_ << pfh_features->points[i].histogram[j] << " ";
+      for (int j=0; j < 153; j++)
+        train_ << spin_images->points[i].histogram[j] << " ";
+      if (shotcolor_features->points[i].descriptorSize() == 1344) {
+        for (int j=0; j < 1344; j++)
+          train_ << shotcolor_features->points[i].descriptor[j] << " ";
+      } else {
+        for (int j=0; j < 1344; j++)
+          train_ << " 0 ";
+      }
+      train_ << "\n";
+    }
+    else if ( !(cloud_test->points[I].r==0  && cloud_test->points[I].g==0  && cloud_test->points[I].b==0) ) {
+      for (int j=0; j < 33; j++)
+        test_ << pfh_features->points[i].histogram[j] << " ";
+      for (int j=0; j < 153; j++)
+        test_ << spin_images->points[i].histogram[j] << " ";
+      if (shotcolor_features->points[i].descriptorSize() == 1344) {
+        for (int j=0; j < 1344; j++)
+          test_ << shotcolor_features->points[i].descriptor[j] << " ";
+      } else {
+        for (int j=0; j < 1344; j++)
+          test_ << " 0 ";
+      }
+      test_ << "\n";
+    } 
+  }
+  train_.close(); test_.close();
+  print_info ("[done, "); print_value ("%g", tt.toc ()); print_info (" ms : "); print_value ("%d", cloud_xyzrgb->points.size()); print_info (" points]\n");
+
+
   /*// Estimate the Intensity Gradient
   tt.tic ();
   print_highlight ("Computing normals for "); print_value ("%s ", filename.c_str ());
@@ -141,42 +239,5 @@ main (int, char** argv)
   pcl::Histogram<32> first_descriptor = rift_output.points[0];
   std::cout << first_descriptor << std::endl;*/
 
-  /*// Setup spin image computation
-  pcl::SpinImageEstimation<pcl::PointXYZ, pcl::Normal, pcl::Histogram<153> > spin_image_descriptor(8, 0.5, 16);
-  spin_image_descriptor.setInputCloud (cloud);
-  spin_image_descriptor.setInputNormals (normals);
-
-  // Use the same KdTree from the normal estimation
-  spin_image_descriptor.setSearchMethod (kdtree);
-  pcl::PointCloud<pcl::Histogram<153> >::Ptr spin_images (new pcl::PointCloud<pcl::Histogram<153> >);
-  spin_image_descriptor.setRadiusSearch (0.4); // default 0.2
-
-  // Actually compute the spin images
-  spin_image_descriptor.compute (*spin_images);
-  print_info ("[done, "); print_value ("%g", tt.toc ()); print_info (" ms : "); print_value ("%d", cloud->points.size()); print_info (" points]\n");
-  std::cout << "SI output points.size (): " << spin_images->points.size () << std::endl;*/
-
-/*  pcl::FPFHSignature33 descriptor = pfh_features->points[0];
-  std::cout << descriptor << std::endl;
-  std::cout << pfh_features->points.size() << std::endl;
-
-  std::stringstream ss;
-  ss << filename.substr(0,filename.length()-4) << "_geo.txt";
-  std::ofstream f(ss.str().c_str());
-
-  tt.tic ();
-  print_highlight ("Saving "); print_value ("%s ", ss.str().c_str ());
-  for (int i=0; i < cloud->points.size(); i++) {
-    f << cloud_n->points[i].normal_x << " " << cloud_n->points[i].normal_y << " " << cloud_n->points[i].normal_z << " ";
-    pcl::FPFHSignature33 desc = pfh_features->points[i];
-    for (int j=0; j < pfh_features->points.size(); j++)
-      f << desc.histogram[j] << " ";
-    / *pcl::Histogram<153> desc = spin_images->points[i];
-    for (int j=0; j < spin_images->points.size(); j++)
-      f << desc.histogram[j] << " ";* /
-    f << std::endl;
-  }
-  f.close();
-  print_info ("[done, "); print_value ("%g", tt.toc ()); print_info (" ms : "); print_value ("%d", cloud->points.size()); print_info (" points]\n");*/
   return 0;
 }

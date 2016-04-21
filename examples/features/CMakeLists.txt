@@ -22,9 +22,8 @@ PCL_ADD_EXAMPLE(pcl_example_rift_estimation FILES example_rift_estimation.cpp
 PCL_ADD_EXAMPLE(pcl_example_difference_of_normals FILES example_difference_of_normals.cpp
                 LINK_WITH pcl_common pcl_kdtree pcl_search pcl_features pcl_io pcl_segmentation pcl_sample_consensus)
 
-#PCL_ADD_EXAMPLE(pcl_example_geometry FILES example_geometry_features.cpp
-#                LINK_WITH pcl_common pcl_kdtree pcl_search pcl_features pcl_io pcl_segmentation pcl_sample_consensus pcl_gpu_features)
-                #LINK_WITH pcl_common pcl_kdtree pcl_search pcl_features pcl_io pcl_segmentation pcl_sample_consensus pcl_gpu_containers pcl_gpu_features)
+PCL_ADD_EXAMPLE(pcl_example_geometry FILES example_geometry_features.cpp
+                LINK_WITH pcl_common pcl_kdtree pcl_search pcl_features pcl_io pcl_segmentation pcl_sample_consensus)
 
 #cuda_add_executable (pcl_cuda_geometry example_geometry_features.cpp)
 #target_link_libraries (pcl_cuda_geometry ${PCL_LIBRARIES})
